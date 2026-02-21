@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   ArrowLeft,
   CreditCard,
@@ -19,6 +20,10 @@ import {
   MapPin,
   CheckCircle,
   Loader2,
+  Bike,
+  Store,
+  Copy,
+  Clock,
 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart-store'
 import { createClient } from '@/lib/supabase/client'
@@ -48,6 +53,13 @@ export default function CheckoutPage() {
   const [couponInput, setCouponInput] = useState('')
   const [addons, setAddons] = useState<Product[]>([])
   const [intentId, setIntentId] = useState<string | null>(null)
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery')
+  const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; detail: string }>>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
+  const [pixOpen, setPixOpen] = useState(false)
+  const [cardOpen, setCardOpen] = useState(false)
+  const [pixCode, setPixCode] = useState('00020126580014BR.GOV.BCB.PIX0123chave-pix-exemplo52040000530398654041.235802BR5920Açaí da Serra6009São Paulo62070503***6304ABCD')
+  const [pixSecondsLeft, setPixSecondsLeft] = useState(15 * 60)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -138,6 +150,37 @@ export default function CheckoutPage() {
     trackIntent()
   }, [formData.name, formData.phone, items, coupon])
 
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('acai-addresses') : null
+      if (raw) {
+        setSavedAddresses(JSON.parse(raw))
+      } else {
+        const seed = [
+          { id: crypto.randomUUID(), label: 'Casa', detail: 'Rua das Flores, 123 - Centro' },
+          { id: crypto.randomUUID(), label: 'Trabalho', detail: 'Av. Paulista, 1500 - Sala 42' },
+        ]
+        setSavedAddresses(seed)
+        window.localStorage.setItem('acai-addresses', JSON.stringify(seed))
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (!pixOpen) return
+    setPixSecondsLeft(15 * 60)
+    const id = setInterval(() => {
+      setPixSecondsLeft((s) => (s > 0 ? s - 1 : 0))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [pixOpen])
+
+  const pixCountdownText = useMemo(() => {
+    const m = Math.floor(pixSecondsLeft / 60).toString().padStart(2, '0')
+    const s = Math.floor(pixSecondsLeft % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
+  }, [pixSecondsLeft])
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -196,8 +239,8 @@ export default function CheckoutPage() {
     toast({ title: 'Cupom removido' })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
 
     if (!formData.name || !formData.phone || !formData.address) {
       toast({ title: 'Erro', description: 'Por favor, preencha todos os campos obrigatórios', variant: 'destructive' })
@@ -225,7 +268,7 @@ export default function CheckoutPage() {
         .insert({
           customer_name: formData.name,
           customer_phone: formData.phone,
-          customer_address: formData.address,
+          customer_address: fulfillment === 'delivery' ? formData.address : 'Retirada na loja',
           customer_complement: formData.complement || null,
           items: orderItems,
           subtotal: getSubtotal(),
@@ -364,33 +407,40 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-8">
-      {/* Header */}
+    <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
         <div className="container mx-auto flex h-16 items-center gap-4 px-4">
           <Link href="/">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Voltar">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <h1 className="text-lg font-semibold text-foreground">
-            Finalizar Pedido
-          </h1>
+          <div className="flex-1">
+            <p className="text-center text-[11px] font-semibold tracking-widest text-muted-foreground">
+              PASSO 04 DE 04
+            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="h-1 flex-1 rounded-full bg-primary" />
+              <div className="h-1 flex-1 rounded-full bg-primary" />
+              <div className="h-1 flex-1 rounded-full bg-primary" />
+              <div className="h-1 flex-1 rounded-full bg-muted" />
+            </div>
+          </div>
         </div>
       </header>
 
       <div className="container mx-auto max-w-2xl px-4 py-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Order Summary */}
+        <form className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Resumo do Pedido</CardTitle>
+              <CardTitle className="text-2xl font-extrabold">Revise seu <span className="text-primary">pedido</span></CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Confira os itens e escolha como deseja pagar.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded-lg bg-muted/50 p-3"
+                  className="flex items-center justify-between rounded-xl bg-muted/50 p-3"
                 >
                   <div>
                     <p className="font-medium text-foreground">
@@ -408,19 +458,21 @@ export default function CheckoutPage() {
                 </div>
               ))}
               <Separator />
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Código do cupom"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                />
-                {coupon ? (
-                  <Button variant="outline" className="bg-transparent" onClick={handleRemoveCoupon}>
-                    Remover
-                  </Button>
-                ) : (
-                  <Button onClick={handleApplyCoupon}>Aplicar</Button>
-                )}
+              <div className="rounded-xl border p-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Código do cupom"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                  />
+                  {coupon ? (
+                    <Button type="button" variant="outline" className="bg-transparent" onClick={handleRemoveCoupon}>
+                      Remover
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={handleApplyCoupon}>Aplicar</Button>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -446,36 +498,145 @@ export default function CheckoutPage() {
               <div className="space-y-3">
                 <p className="text-sm font-medium text-foreground">Sugestões para completar seu pedido</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {addons.slice(0, 4).map((addon) => (
-                    <div key={addon.id} className="flex items-center justify-between rounded-lg border p-3">
-                      <div className="text-sm">
-                        <p className="font-medium text-foreground">{addon.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatPrice(addon.price)}</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-transparent"
-                        onClick={() => addAddonToItem(items[items.length - 1].id, addon)}
+                  {addons.slice(0, 4).map((addon) => {
+                    const canAdd = items.length > 0
+                    return (
+                      <div
+                        key={addon.id}
+                        className="group relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:shadow-md"
                       >
-                        Adicionar
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="relative aspect-[4/3] w-full overflow-hidden bg-primary/10">
+                          {addon.image_url ? (
+                            <div
+                              className="h-full w-full bg-cover bg-center"
+                              style={{ backgroundImage: `url(${addon.image_url})` }}
+                            />
+                          ) : (
+                            <div className="h-full w-full bg-gradient-to-br from-primary/20 to-primary/5" />
+                          )}
+                          <div className="absolute right-2 top-2 rounded-full bg-card/90 px-2 py-0.5 text-xs font-semibold text-foreground shadow">
+                            {addon.price > 0 ? `+ ${formatPrice(addon.price)}` : 'Grátis'}
+                          </div>
+                        </div>
+                        <div className="flex h-full flex-col p-3">
+                          <p className="truncate text-sm font-medium text-foreground">{addon.name}</p>
+                          <div className="mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full bg-transparent"
+                              disabled={!canAdd}
+                              onClick={() => canAdd && addAddonToItem(items[items.length - 1].id, addon)}
+                            >
+                              Adicionar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Delivery Info */}
+          {/* Fulfillment */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPin className="h-5 w-5 text-primary" />
-                Dados de Entrega
-              </CardTitle>
+              <CardTitle className="text-lg">Como prefere receber?</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFulfillment('delivery')}
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 ${fulfillment === 'delivery' ? 'border-primary bg-primary/5' : 'border-border'}`}
+                >
+                  <Bike className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Entrega</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFulfillment('pickup')}
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 ${fulfillment === 'pickup' ? 'border-primary bg-primary/5' : 'border-border'}`}
+                >
+                  <Store className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Retirada</span>
+                </button>
+              </div>
+              {fulfillment === 'delivery' && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Onde entregamos?</Label>
+                    <Input
+                      id="address"
+                      name="address"
+                      placeholder="Digite seu endereço ou CEP"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="flex w-full min-w-0 items-center gap-1 rounded-xl border-2 border-border p-3 text-left transition-colors hover:border-primary/50"
+                    onClick={() => {
+                      setFormData((p) => ({ ...p, address: 'Minha localização atual' }))
+                      toast({ title: 'Localização', description: 'Usando sua localização atual (exemplo)' })
+                    }}
+                  >
+                    <MapPin className="h-4 w-4 text-primary" />
+                    <span className="flex-1 truncate text-sm font-medium">Usar minha localização</span>
+                  </button>
+                  {!!savedAddresses.length && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Endereços salvos</span>
+                        <button
+                          type="button"
+                          className="text-primary font-medium"
+                          onClick={() => {
+                            // Gerenciar: limpar todos por ora (simples)
+                            setSavedAddresses([])
+                            try { window.localStorage.removeItem('acai-addresses') } catch {}
+                          }}
+                        >
+                          Gerenciar
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {savedAddresses.map((addr) => {
+                          const selected = selectedAddressId === addr.id
+                          return (
+                            <button
+                              key={addr.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAddressId(addr.id)
+                                setFormData((p) => ({ ...p, address: addr.detail }))
+                              }}
+                              className={`flex w-full items-start justify-between rounded-xl border-2 p-3 text-left ${selected ? 'border-primary bg-primary/5' : 'border-border'}`}
+                            >
+                              <div>
+                                <p className="font-medium">{addr.label}</p>
+                                <p className="text-xs text-muted-foreground">{addr.detail}</p>
+                              </div>
+                              <div className={`mt-1 h-5 w-5 shrink-0 rounded-full border-2 ${selected ? 'border-primary bg-primary' : 'border-muted-foreground/30'}`} />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {fulfillment === 'pickup' && (
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Retire na loja:</p>
+                  <p className="mt-1 font-medium">Rua das Palmeiras, 123 - Centro</p>
+                </div>
+              )}
+              <Separator />
               <div className="space-y-2">
                 <Label htmlFor="name">Nome completo *</Label>
                 <Input
@@ -498,27 +659,18 @@ export default function CheckoutPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Endereço completo *</Label>
-                <Input
-                  id="address"
-                  name="address"
-                  placeholder="Rua, número, bairro"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="complement">Complemento</Label>
-                <Input
-                  id="complement"
-                  name="complement"
-                  placeholder="Apto, bloco, referência..."
-                  value={formData.complement}
-                  onChange={handleInputChange}
-                />
-              </div>
+              {fulfillment === 'delivery' && (
+                <div className="space-y-2">
+                  <Label htmlFor="complement">Complemento</Label>
+                  <Input
+                    id="complement"
+                    name="complement"
+                    placeholder="Apto, bloco, referência..."
+                    value={formData.complement}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="notes">Observações</Label>
                 <Textarea
@@ -559,9 +711,7 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">PIX</p>
-                    <p className="text-sm text-muted-foreground">
-                      Pagamento instantâneo
-                    </p>
+                    <p className="text-sm text-muted-foreground">Aprovação imediata</p>
                   </div>
                 </label>
                 <label
@@ -581,16 +731,47 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 </label>
+                <label
+                  htmlFor="debit_card"
+                  className="flex cursor-pointer items-center gap-4 rounded-xl border-2 border-border p-4 transition-colors hover:border-primary/50 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
+                >
+                  <RadioGroupItem value="debit_card" id="debit_card" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted/50">
+                    <Store className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Pagar na Entrega
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Dinheiro ou Maquininha
+                    </p>
+                  </div>
+                </label>
               </RadioGroup>
             </CardContent>
           </Card>
 
-          {/* Submit Button */}
+          <div className="h-4" />
+        </form>
+      </div>
+
+      {/* Sticky Footer CTA */}
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur">
+        <div className="container mx-auto max-w-2xl px-4 py-3">
           <Button
-            type="submit"
             size="lg"
             className="w-full"
             disabled={isLoading}
+            onClick={() => {
+              if (formData.paymentMethod === 'pix') {
+                setPixOpen(true)
+              } else if (formData.paymentMethod === 'credit_card') {
+                setCardOpen(true)
+              } else {
+                handleSubmit()
+              }
+            }}
           >
             {isLoading ? (
               <>
@@ -598,11 +779,124 @@ export default function CheckoutPage() {
                 Processando...
               </>
             ) : (
-              `Confirmar Pedido • ${formatPrice(getTotal())}`
+              'Confirmar e Pagar'
             )}
           </Button>
-        </form>
+        </div>
       </div>
+
+      {/* PIX Dialog */}
+      <Dialog open={pixOpen} onOpenChange={setPixOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pagamento via PIX</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Escaneie o QR Code ou copie o código para pagar.</p>
+            <div className="flex flex-col items-center rounded-2xl border p-4">
+              <div className="mb-3 flex h-48 w-48 items-center justify-center rounded-xl bg-muted">
+                {/* Placeholder do QR */}
+                <div className="h-40 w-40 rounded bg-background shadow-inner" />
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-accent/20 px-3 py-1 text-sm text-accent-foreground">
+                <Clock className="h-4 w-4" />
+                Expira em {pixCountdownText}
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs text-muted-foreground">Pix Copia e Cola</Label>
+              <div className="flex gap-2">
+                <Input value={pixCode} readOnly />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(pixCode)
+                      toast({ title: 'Código copiado' })
+                    } catch {}
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total a Pagar</span>
+                <span className="text-xl font-bold text-primary">{formatPrice(getTotal())}</span>
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setPixOpen(false)
+                handleSubmit()
+              }}
+            >
+              Já realizei o pagamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cartão Dialog (visual) */}
+      <Dialog open={cardOpen} onOpenChange={setCardOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-gradient-to-br from-primary to-primary/70 p-5 text-primary-foreground shadow">
+              <div className="flex items-start justify-between">
+                <div className="h-6 w-10 rounded bg-primary-foreground/20" />
+                <span className="text-sm font-semibold">VISA</span>
+              </div>
+              <div className="mt-5 text-lg tracking-widest">•••• •••• •••• 4242</div>
+              <div className="mt-3 flex items-center justify-between text-xs opacity-90">
+                <span>NOME NO CARTÃO</span>
+                <span>VALIDADE 12/28</span>
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <Label>Número do Cartão</Label>
+                <Input placeholder="0000 0000 0000 0000" />
+              </div>
+              <div>
+                <Label>Nome no Cartão</Label>
+                <Input placeholder="Como impresso no cartão" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Validade</Label>
+                  <Input placeholder="MM/AA" />
+                </div>
+                <div>
+                  <Label>CVV</Label>
+                  <Input placeholder="123" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total a Pagar</span>
+                <span className="text-xl font-bold text-primary">{formatPrice(getTotal())}</span>
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setCardOpen(false)
+                handleSubmit()
+              }}
+            >
+              Finalizar Pagamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
