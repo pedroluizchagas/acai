@@ -6,6 +6,8 @@ import { HeroSection } from '@/components/storefront/hero-section'
 import { ProductsSection } from '@/components/storefront/products-section'
 import { AcaiBuilder } from '@/components/storefront/acai-builder'
 import { CartSidebar } from '@/components/storefront/cart-sidebar'
+import { MobileLanding } from '@/components/storefront/mobile-landing'
+import { MobileBottomNav } from '@/components/storefront/mobile-bottom-nav'
 import { createClient } from '@/lib/supabase/client'
 import type { Product } from '@/lib/types'
 import { MapPin, Phone, Clock, Instagram, Facebook } from 'lucide-react'
@@ -87,21 +89,35 @@ export default function HomePage() {
             </div>
           </div>
         )}
-        <HeroSection onOrderClick={() => handleOpenBuilder()} />
 
-        {isLoading ? (
-          <section className="py-20">
-            <div className="container mx-auto px-4 text-center">
-              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="mt-4 text-muted-foreground">Carregando cardápio...</p>
-            </div>
-          </section>
-        ) : (
-          <ProductsSection
+        {/* Mobile layout */}
+        <div className="md:hidden">
+          <MobileLanding
             products={products}
-            onSelectProduct={handleOpenBuilder}
+            onSelectProduct={(p) => handleOpenBuilder(p)}
+            onOrderClick={() => handleOpenBuilder()}
+            couponCode={banner.code}
           />
-        )}
+        </div>
+
+        {/* Desktop/tablet layout */}
+        <div className="hidden md:block">
+          <HeroSection onOrderClick={() => handleOpenBuilder()} />
+
+          {isLoading ? (
+            <section className="py-20">
+              <div className="container mx-auto px-4 text-center">
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="mt-4 text-muted-foreground">Carregando cardápio...</p>
+              </div>
+            </section>
+          ) : (
+            <ProductsSection
+              products={products}
+              onSelectProduct={handleOpenBuilder}
+            />
+          )}
+        </div>
 
         {/* About Section */}
         <section id="sobre" className="bg-primary/5 py-12 md:py-20">
@@ -181,7 +197,7 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-card py-8">
+      <footer className="border-t border-border bg-card pt-8 pb-20 md:py-8">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex items-center gap-2">
@@ -221,6 +237,7 @@ export default function HomePage() {
         initialSize={selectedSize}
       />
       <CartSidebar />
+      <MobileBottomNav />
     </div>
   )
 }
