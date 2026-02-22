@@ -8,39 +8,20 @@ import { AcaiBuilder } from '@/components/storefront/acai-builder'
 import { CartSidebar } from '@/components/storefront/cart-sidebar'
 import { MobileLanding } from '@/components/storefront/mobile-landing'
 import { MobileBottomNav } from '@/components/storefront/mobile-bottom-nav'
-import { createClient } from '@/lib/supabase/client'
 import type { Product } from '@/lib/types'
 import { MapPin, Phone, Clock, Instagram, Facebook } from 'lucide-react'
 import { trackViewContent } from '@/lib/analytics'
+import { useProducts } from '@/hooks/use-products'
 
 export default function HomePage() {
-  const [products, setProducts] = useState<Product[]>([])
+  const { products, loading: isLoading } = useProducts()
   const [isBuilderOpen, setIsBuilderOpen] = useState(false)
   const [selectedSize, setSelectedSize] = useState<Product | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [banner, setBanner] = useState<{ enabled: boolean; text: string; code: string | null }>({ enabled: false, text: '', code: null })
 
   useEffect(() => {
-    async function fetchProducts() {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_available', true)
-        .order('price', { ascending: true })
-
-      if (!error && data) {
-        setProducts(data)
-      }
-      setIsLoading(false)
-    }
-
-    fetchProducts()
-  }, [])
-
-  useEffect(() => {
     async function fetchBanner() {
-      const supabase = createClient()
+      const supabase = (await import('@/lib/supabase/client')).createClient()
       const { data } = await supabase
         .from('marketing_settings')
         .select('first_order_banner_enabled, first_order_banner_text, first_order_coupon_code')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,32 +15,14 @@ import {
   Clock,
   Truck,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
-import type { Product } from '@/lib/types'
+import { useProducts } from '@/hooks/use-products'
 
 export default function CardapioPage() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
+  const { products, loading } = useProducts()
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_available', true)
-        .order('category')
-        .order('price')
-
-      setProducts(data || [])
-      setLoading(false)
-    }
-    fetchProducts()
-  }, [])
-
-  const sizes = products.filter((p) => p.category === 'size')
-  const bases = products.filter((p) => p.category === 'base')
-  const addons = products.filter((p) => p.category === 'addon')
+  const sizes = useMemo(() => products.filter((p) => p.category === 'size'), [products])
+  const bases = useMemo(() => products.filter((p) => p.category === 'base'), [products])
+  const addons = useMemo(() => products.filter((p) => p.category === 'addon'), [products])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {

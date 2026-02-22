@@ -49,12 +49,13 @@ import {
   IceCream,
   Cherry,
   RefreshCw,
+  Ruler,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Product } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 
-type ProductCategory = 'base' | 'addon'
+type ProductCategory = 'size' | 'base' | 'addon'
 
 interface ProductFormData {
   name: string
@@ -74,7 +75,7 @@ export default function ProductsPage() {
   const { toast } = useToast()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<ProductCategory>('base')
+  const [activeTab, setActiveTab] = useState<ProductCategory>('size')
   
   // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -115,7 +116,7 @@ export default function ProductsPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .in('category', ['base', 'addon'])
+        .in('category', ['size', 'base', 'addon'])
         .order('category')
         .order('name')
       if (error) {
@@ -145,7 +146,7 @@ export default function ProductsPage() {
       const bucket = 'products'
       const ext = (file.name.split('.').pop() || '').toLowerCase() || (file.type.split('/')[1] || 'jpg')
       const safeName = formData.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
-      const folder = activeTab === 'addon' ? 'addons' : 'bases'
+      const folder = activeTab === 'addon' ? 'addons' : activeTab === 'size' ? 'sizes' : 'bases'
       const path = `${folder}/${crypto.randomUUID()}-${safeName || 'produto'}.${ext}`
       const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
         upsert: true,
@@ -168,6 +169,14 @@ export default function ProductsPage() {
   const handleAddProduct = async () => {
     if (!formData.name.trim()) {
       toast({ title: 'Erro', description: 'Nome é obrigatório', variant: 'destructive' })
+      return
+    }
+    const normalized = formData.name.trim().toLowerCase()
+    const alreadyExists = products.some(
+      (p) => p.category === activeTab && (p.name || '').trim().toLowerCase() === normalized
+    )
+    if (alreadyExists) {
+      toast({ title: 'Já existe', description: 'Já existe um item com este nome nesta categoria', variant: 'destructive' })
       return
     }
 
@@ -205,6 +214,17 @@ export default function ProductsPage() {
     if (!selectedProduct) return
     if (!formData.name.trim()) {
       toast({ title: 'Erro', description: 'Nome é obrigatório', variant: 'destructive' })
+      return
+    }
+    const normalized = formData.name.trim().toLowerCase()
+    const conflict = products.some(
+      (p) =>
+        p.id !== selectedProduct.id &&
+        p.category === activeTab &&
+        (p.name || '').trim().toLowerCase() === normalized
+    )
+    if (conflict) {
+      toast({ title: 'Conflito de nome', description: 'Já existe um item com este nome nesta categoria', variant: 'destructive' })
       return
     }
 
@@ -321,7 +341,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Produtos</h1>
           <p className="text-sm text-muted-foreground">
-            Gerencie as bases e adicionais do açaí
+            Gerencie tamanhos, sabores de base e adicionais do açaí
           </p>
         </div>
         <div className="flex gap-2">
@@ -333,13 +353,13 @@ export default function ProductsPage() {
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="mr-2 h-4 w-4" />
-                Novo {activeTab === 'base' ? 'Sabor' : 'Adicional'}
+                {activeTab === 'size' ? 'Novo Tamanho' : activeTab === 'base' ? 'Novo Sabor' : 'Novo Adicional'}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  Adicionar {activeTab === 'base' ? 'Sabor de Base' : 'Adicional'}
+                  {activeTab === 'size' ? 'Adicionar Tamanho do Açaí' : activeTab === 'base' ? 'Adicionar Sabor de Base' : 'Adicionar Adicional'}
                 </DialogTitle>
                 <DialogDescription>
                   Preencha as informações do novo produto
@@ -350,7 +370,13 @@ export default function ProductsPage() {
                   <Label htmlFor="name">Nome *</Label>
                   <Input
                     id="name"
-                    placeholder={activeTab === 'base' ? 'Ex: Açaí com Cupuaçu' : 'Ex: Granola Premium'}
+                    placeholder={
+                      activeTab === 'size'
+                        ? 'Ex: Pequeno 300ml'
+                        : activeTab === 'base'
+                          ? 'Ex: Açaí com Cupuaçu'
+                          : 'Ex: Granola Premium'
+                    }
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -365,7 +391,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="price">Preço Adicional (R$)</Label>
+                  <Label htmlFor="price">{activeTab === 'size' ? 'Preço (R$)' : 'Preço Adicional (R$)'}</Label>
                   <Input
                     id="price"
                     type="number"
@@ -376,9 +402,11 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {activeTab === 'base' 
-                      ? 'Valor extra cobrado pela base (0 para base padrão)' 
-                      : 'Valor cobrado por este adicional'}
+                    {activeTab === 'size'
+                      ? 'Preço do copo conforme o tamanho'
+                      : activeTab === 'base' 
+                        ? 'Valor extra cobrado pela base (0 para base padrão)' 
+                        : 'Valor cobrado por este adicional'}
                   </p>
                 </div>
               <div className="grid gap-2">
@@ -429,6 +457,10 @@ export default function ProductsPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ProductCategory)}>
         <TabsList className="mb-4">
+          <TabsTrigger value="size" className="gap-2">
+            <Ruler className="h-4 w-4" />
+            Tamanhos
+          </TabsTrigger>
           <TabsTrigger value="base" className="gap-2">
             <IceCream className="h-4 w-4" />
             Sabores de Base
@@ -438,6 +470,27 @@ export default function ProductsPage() {
             Adicionais
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="size">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Tamanhos do Açaí</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Cadastre os tamanhos disponíveis (300ml, 500ml, 700ml) com seus respectivos preços.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ProductTable
+                products={filteredProducts}
+                loading={loading}
+                onEdit={openEditDialog}
+                onDelete={openDeleteDialog}
+                onToggleAvailability={handleToggleAvailability}
+                formatPrice={formatPrice}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="base">
           <Card>
@@ -675,10 +728,10 @@ function ProductTable({
                 {product.description || '-'}
               </TableCell>
               <TableCell>
-                {product.price > 0 ? (
-                  <span className="font-medium text-primary">
-                    +{formatPrice(product.price)}
-                  </span>
+                {product.category === 'size' ? (
+                  <span className="font-medium text-primary">{formatPrice(product.price)}</span>
+                ) : product.price > 0 ? (
+                  <span className="font-medium text-primary">+{formatPrice(product.price)}</span>
                 ) : (
                   <span className="text-muted-foreground">Incluso</span>
                 )}
