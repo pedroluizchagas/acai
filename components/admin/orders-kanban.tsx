@@ -9,6 +9,10 @@ import { OrderCard } from './order-card'
 import { createClient } from '@/lib/supabase/client'
 import type { Order } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ScrollArea as UIScrollArea } from '@/components/ui/scroll-area'
 
 const columns = [
   { id: 'pending', title: 'Pendente', color: 'bg-yellow-500' },
@@ -28,6 +32,11 @@ export function OrdersKanban() {
   const [isLoading, setIsLoading] = useState(true)
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
   const { toast } = useToast()
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [couriers, setCouriers] = useState<Array<{ id: string; full_name: string | null; phone: string | null }>>([])
+  const [selectedCourier, setSelectedCourier] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [assigning, setAssigning] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     const supabase = createClient()
@@ -47,6 +56,11 @@ export function OrdersKanban() {
 
     // Set up realtime subscription
     const supabase = createClient()
+    supabase
+      .from('couriers')
+      .select('id, full_name, phone')
+      .eq('active', true)
+      .then(({ data }) => setCouriers((data || []) as any))
     const channel = supabase
       .channel('orders-changes')
       .on(
@@ -82,6 +96,19 @@ export function OrdersKanban() {
     } else {
       toast({ title: 'Sucesso', description: 'Pedido atualizado!' })
       fetchOrders()
+      if (nextStatus === 'out_for_delivery') {
+        try {
+          await fetch('/api/push/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: 'Nova entrega disponível',
+              body: `Pedido #${updated?.order_number}`,
+              url: '/entregador',
+            }),
+          })
+        } catch {}
+      }
       if (nextStatus === 'completed' && updated?.customer_phone) {
         const { data: ms } = await supabase
           .from('marketing_settings')
@@ -144,6 +171,13 @@ export function OrdersKanban() {
       {/* Kanban Board */}
       <ScrollArea className="w-full pb-4">
         <div className="flex gap-4 pb-4">
+          <div className="w-full">
+            <div className="mb-2 flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+                Atribuir em massa
+              </Button>
+            </div>
+          </div>
           {columns.map((column) => {
             const columnOrders = getOrdersByStatus(column.id)
             return (
@@ -189,6 +223,106 @@ export function OrdersKanban() {
         </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Atribuir em massa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Select onValueChange={setSelectedCourier} value={selectedCourier ?? undefined}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione o entregador" />
+              </SelectTrigger>
+              <SelectContent>
+                {couriers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name || 'Sem nome'} {c.phone ? `(${c.phone})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Pedidos elegíveis (sem entregador)</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setSelectedIds(
+                    orders
+                      .filter(
+                        (o) =>
+                          (o.status === 'preparing' || o.status === 'out_for_delivery') && !o.courier_id,
+                      )
+                      .map((o) => o.id),
+                  )
+                }
+              >
+                Selecionar todos
+              </Button>
+            </div>
+            <UIScrollArea className="h-64 rounded border p-2">
+              <div className="space-y-2">
+                {orders
+                  .filter(
+                    (o) => (o.status === 'preparing' || o.status === 'out_for_delivery') && !o.courier_id,
+                  )
+                  .map((o) => {
+                    const checked = selectedIds.includes(o.id)
+                    return (
+                      <label key={o.id} className="flex items-center justify-between rounded p-2 hover:bg-muted">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(val) => {
+                              setSelectedIds((prev) =>
+                                val ? [...prev, o.id] : prev.filter((id) => id !== o.id),
+                              )
+                            }}
+                          />
+                          <span className="text-sm">#{o.order_number} — {o.customer_name}</span>
+                        </div>
+                        <span className="truncate text-xs text-muted-foreground">{o.customer_address}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+            </UIScrollArea>
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={async () => {
+                  if (!selectedCourier || selectedIds.length === 0) return
+                  setAssigning(true)
+                  const supabase = createClient()
+                  const patch: any = { courier_id: selectedCourier, updated_at: new Date().toISOString() }
+                  const { error } = await supabase.from('orders').update(patch).in('id', selectedIds)
+                  if (!error) {
+                    toast({ title: 'Atribuição concluída', description: `${selectedIds.length} pedido(s)` })
+                    setBulkOpen(false)
+                    setSelectedIds([])
+                    fetchOrders()
+                    try {
+                      await fetch('/api/push/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          title: 'Nova entrega atribuída',
+                          body: `${selectedIds.length} pedido(s) atribuídos`,
+                          url: '/entregador',
+                          user_ids: [selectedCourier],
+                        }),
+                      })
+                    } catch {}
+                  }
+                  setAssigning(false)
+                }}
+                disabled={!selectedCourier || selectedIds.length === 0 || assigning}
+              >
+                Confirmar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

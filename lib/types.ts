@@ -35,6 +35,8 @@ export interface Order {
   customer_phone: string
   customer_address: string
   customer_complement: string | null
+  customer_lat?: number | null
+  customer_lng?: number | null
   items: OrderItem[]
   subtotal: number
   delivery_fee: number
@@ -43,6 +45,14 @@ export interface Order {
   coupon_code?: string | null
   payment_method: 'pix' | 'credit_card' | 'debit_card'
   status: 'pending' | 'preparing' | 'out_for_delivery' | 'completed' | 'cancelled'
+  courier_id?: string | null
+  delivery_status?: 'assigned' | 'accepted' | 'picked_up' | 'enroute' | 'delivered' | 'failed' | null
+  picked_up_at?: string | null
+  delivered_at?: string | null
+  driver_last_lat?: number | null
+  driver_last_lng?: number | null
+  distance_km?: number | null
+  eta_min?: number | null
   notes: string | null
   created_at: string
   updated_at: string

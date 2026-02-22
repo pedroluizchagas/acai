@@ -30,6 +30,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { trackPurchase } from '@/lib/analytics'
 import type { Coupon, Product } from '@/lib/types'
+import { geocodeAddress } from '@/lib/geo'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -255,6 +256,18 @@ export default function CheckoutPage() {
     setIsLoading(true)
 
     try {
+      let customerLat: number | null = null
+      let customerLng: number | null = null
+      if (fulfillment === 'delivery' && formData.address && formData.address.toLowerCase().includes('retirada') === false) {
+        try {
+          const point = await geocodeAddress(formData.address)
+          if (point) {
+            customerLat = point.lat
+            customerLng = point.lng
+          }
+        } catch {}
+      }
+
       const orderItems = items.map((item) => ({
         name: item.size.name,
         size: item.size.name.split(' ')[1],
@@ -270,6 +283,8 @@ export default function CheckoutPage() {
           customer_phone: formData.phone,
           customer_address: fulfillment === 'delivery' ? formData.address : 'Retirada na loja',
           customer_complement: formData.complement || null,
+          customer_lat: customerLat,
+          customer_lng: customerLng,
           items: orderItems,
           subtotal: getSubtotal(),
           delivery_fee: getEffectiveDeliveryFee(),

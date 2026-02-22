@@ -25,6 +25,14 @@ import {
   LogOut,
   IceCream,
   Tag,
+  Wallet,
+  CreditCard,
+  Coins,
+  FileBarChart,
+  Activity,
+  Utensils,
+  MoveRight,
+  Timer,
 } from 'lucide-react'
 
 const navigation = [
@@ -32,6 +40,14 @@ const navigation = [
   { name: 'Produtos', href: '/admin/products', icon: IceCream },
   { name: 'Estoque', href: '/admin/stock', icon: Package },
   { name: 'Financeiro', href: '/admin/finance', icon: BarChart3 },
+  { name: 'Receber', href: '/admin/receber', icon: Wallet },
+  { name: 'Pagar', href: '/admin/pagar', icon: CreditCard },
+  { name: 'Tesouraria', href: '/admin/tesouraria', icon: Coins },
+  { name: 'Receitas', href: '/admin/receitas', icon: Utensils },
+  { name: 'Movimentos', href: '/admin/movimentos-estoque', icon: MoveRight },
+  { name: 'Cobertura', href: '/admin/cobertura-estoque', icon: Timer },
+  { name: 'DRE', href: '/admin/dre', icon: FileBarChart },
+  { name: 'Fluxo', href: '/admin/fluxo', icon: Activity },
   { name: 'Cupons', href: '/admin/coupons', icon: Tag },
   { name: 'Configurações', href: '/admin/settings', icon: Settings },
 ]

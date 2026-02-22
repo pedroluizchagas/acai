@@ -53,6 +53,7 @@ export default function StockPage() {
   const [editMinQty, setEditMinQty] = useState('')
   const [editUnit, setEditUnit] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [summary, setSummary] = useState<Record<string, { qty_on_hand: number; avg_cost: number; total_value: number }>>({})
 
   useEffect(() => {
     fetchStock()
@@ -94,6 +95,16 @@ export default function StockPage() {
         return
       }
       setStock(data || [])
+      const { data: sum } = await supabase.from('view_stock_summary').select('*')
+      const map: Record<string, { qty_on_hand: number; avg_cost: number; total_value: number }> = {}
+      ;(sum || []).forEach((row: any) => {
+        map[row.id] = {
+          qty_on_hand: Number(row.qty_on_hand || 0),
+          avg_cost: Number(row.avg_cost || 0),
+          total_value: Number(row.total_value || 0),
+        }
+      })
+      setSummary(map)
     } catch (err) {
       const msg = getErrorMessage(err)
       console.error('Error fetching stock:', msg)
@@ -119,6 +130,17 @@ export default function StockPage() {
       toast({ title: 'Erro', description: 'Erro ao atualizar estoque', variant: 'destructive' })
     } else {
       toast({ title: 'Sucesso', description: 'Estoque atualizado!' })
+      try {
+        await supabase.from('stock_movements').insert({
+          stock_item_id: replenishItem.id,
+          type: 'in',
+          qty: parseInt(replenishQty, 10),
+          unit_cost: 0,
+          total_cost: 0,
+          ref_type: 'manual',
+          ref_id: replenishItem.id,
+        })
+      } catch {}
       fetchStock()
     }
 
@@ -200,11 +222,19 @@ export default function StockPage() {
     }
   }
 
+  const getCalcQty = (item: StockItem) => {
+    const v = summary[item.id]?.qty_on_hand
+    if (v === undefined || v === null || isNaN(v)) return item.quantity
+    if (v > 0) return v
+    return item.quantity
+  }
+
   const getStatus = (item: StockItem) => {
-    if (item.quantity <= item.min_quantity * 0.5) {
+    const q = getCalcQty(item)
+    if (q <= item.min_quantity * 0.5) {
       return { label: 'Crítico', variant: 'destructive' as const, icon: AlertTriangle }
     }
-    if (item.quantity <= item.min_quantity) {
+    if (q <= item.min_quantity) {
       return { label: 'Baixo', variant: 'secondary' as const, icon: AlertTriangle }
     }
     return { label: 'Normal', variant: 'outline' as const, icon: CheckCircle }
@@ -214,13 +244,9 @@ export default function StockPage() {
     item.item_name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const lowStockCount = stock.filter(
-    (item) => item.quantity <= item.min_quantity
-  ).length
+  const lowStockCount = stock.filter((item) => getCalcQty(item) <= item.min_quantity).length
 
-  const criticalCount = stock.filter(
-    (item) => item.quantity <= item.min_quantity * 0.5
-  ).length
+  const criticalCount = stock.filter((item) => getCalcQty(item) <= item.min_quantity * 0.5).length
 
   if (isLoading) {
     return (
@@ -243,7 +269,7 @@ export default function StockPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="flex items-center gap-4 p-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
@@ -252,6 +278,21 @@ export default function StockPage() {
             <div>
               <p className="text-2xl font-bold text-foreground">{stock.length}</p>
               <p className="text-sm text-muted-foreground">Total de Itens</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+              <Package className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                  Object.values(summary).reduce((s, v) => s + Number(v.total_value || 0), 0),
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">Valor do Estoque</p>
             </div>
           </CardContent>
         </Card>
@@ -304,6 +345,38 @@ export default function StockPage() {
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              <Button
+                variant="outline"
+                className="bg-transparent"
+                onClick={async () => {
+                  try {
+                    const supabase = createClient()
+                    const { data } = await supabase.from('view_stock_summary').select('*')
+                    const rows = [
+                      ['Item', 'Unidade', 'Qtd Inicial', 'Qtd Saída', 'Qtd Calc', 'Custo Médio', 'Valor'],
+                      ...(data || []).map((r: any) => [
+                        r.item_name,
+                        r.unit,
+                        String(r.qty_in || 0),
+                        String(r.qty_out || 0),
+                        String(r.qty_on_hand || 0),
+                        String(r.avg_cost || 0),
+                        String(r.total_value || 0),
+                      ]),
+                    ]
+                    const csv = rows.map((row) => row.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = 'estoque.csv'
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  } catch {}
+                }}
+              >
+                Exportar CSV
+              </Button>
               <Button onClick={() => setIsAddOpen(true)} className="gap-1">
                 <Plus className="h-4 w-4" />
                 Adicionar Item
@@ -319,6 +392,9 @@ export default function StockPage() {
                   <TableHead>Item</TableHead>
                   <TableHead className="text-center">Qtd Atual</TableHead>
                   <TableHead className="text-center">Qtd Mínima</TableHead>
+                  <TableHead className="text-center">Qtd Calc</TableHead>
+                  <TableHead className="text-center">Custo Médio</TableHead>
+                  <TableHead className="text-center">Valor</TableHead>
                   <TableHead className="text-center">Unidade</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ação</TableHead>
@@ -327,6 +403,8 @@ export default function StockPage() {
               <TableBody>
                 {filteredStock.map((item) => {
                   const status = getStatus(item)
+                  const sum = summary[item.id]
+                  const calcQty = getCalcQty(item)
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">
@@ -345,6 +423,15 @@ export default function StockPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         {item.min_quantity}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {calcQty}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {sum ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sum.avg_cost || 0) : '-'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {sum ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sum.total_value || 0) : '-'}
                       </TableCell>
                       <TableCell className="text-center">{item.unit}</TableCell>
                       <TableCell className="text-center">

@@ -1,0 +1,32 @@
+{
+  "name": "Entrega | Açaí da Serra",
+  "short_name": "Entrega",
+  "start_url": "/entregador",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#4a1d6b",
+  "background_color": "#ffffff",
+  "description": "App PWA para entregadores acompanharem e concluírem entregas.",
+  "icons": [
+    {
+      "src": "/apple-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Minhas Entregas",
+      "short_name": "Entregas",
+      "url": "/entregador"
+    }
+  ],
+  "prefer_related_applications": false
+}

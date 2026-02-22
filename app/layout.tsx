@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 import Script from 'next/script'
 import { createClient } from '@/lib/supabase/server'
+import SWRegister from '@/components/pwa/sw-register'
 
 const poppins = Poppins({ 
   subsets: ["latin"],
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
   title: 'Açaí da Serra | Delivery de Açaí Premium',
   description: 'O melhor açaí da região! Monte seu copo personalizado com os melhores ingredientes. Delivery rápido e prático.',
   generator: 'v0.app',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       {
@@ -71,6 +73,7 @@ export default async function RootLayout({
         {children}
         <Toaster />
         <Analytics />
+        <SWRegister />
         {ga4Id && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`} strategy="afterInteractive" />

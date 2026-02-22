@@ -7,6 +7,7 @@ import {
   TrendingUp,
   ShoppingBag,
   Calendar,
+  Coins,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Order } from '@/lib/types'
@@ -25,10 +26,16 @@ import { useToast } from '@/hooks/use-toast'
 export default function FinancePage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [cogsMonthly, setCogsMonthly] = useState<number>(0)
+  const [arOpenTotal, setArOpenTotal] = useState<number>(0)
+  const [apOpenTotal, setApOpenTotal] = useState<number>(0)
   const { toast } = useToast()
 
   useEffect(() => {
     fetchOrders()
+    fetchCogs()
+    fetchReceivables()
+    fetchPayables()
   }, [])
 
   const fetchOrders = async () => {
@@ -75,6 +82,82 @@ export default function FinancePage() {
     }
   }
 
+  const fetchPayables = async () => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('bills')
+        .select('total,status')
+        .eq('status', 'open')
+      if (error) {
+        setApOpenTotal(0)
+        return
+      }
+      const total = (data || []).reduce((sum: number, b: any) => sum + Number(b.total || 0), 0)
+      setApOpenTotal(total > 0 ? +Number(total).toFixed(2) : 0)
+    } catch {
+      setApOpenTotal(0)
+    }
+  }
+
+  const fetchReceivables = async () => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('amount,status')
+        .eq('status', 'open')
+      if (error) {
+        setArOpenTotal(0)
+        return
+      }
+      const total = (data || []).reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0)
+      setArOpenTotal(total > 0 ? +Number(total).toFixed(2) : 0)
+    } catch {
+      setArOpenTotal(0)
+    }
+  }
+
+  const fetchCogs = async () => {
+    try {
+      const supabase = createClient()
+      const { data: accounts, error: accErr } = await supabase
+        .from('chart_of_accounts')
+        .select('id,name,type')
+        .eq('type', 'expense')
+        .ilike('name', '%Custo das Vendas%')
+      if (accErr) {
+        setCogsMonthly(0)
+        return
+      }
+      const ids = (accounts || []).map((a: any) => a.id)
+      if (!ids.length) {
+        setCogsMonthly(0)
+        return
+      }
+      const start = new Date()
+      start.setDate(1)
+      start.setHours(0, 0, 0, 0)
+      const { data: entries, error: entErr } = await supabase
+        .from('journal_entries')
+        .select('debit,credit,created_at,account_id')
+        .in('account_id', ids)
+        .gte('created_at', start.toISOString())
+      if (entErr) {
+        setCogsMonthly(0)
+        return
+      }
+      const total = (entries || []).reduce((sum: number, e: any) => {
+        const d = Number(e.debit || 0)
+        const c = Number(e.credit || 0)
+        return sum + (d - c)
+      }, 0)
+      setCogsMonthly(total > 0 ? +Number(total).toFixed(2) : 0)
+    } catch {
+      setCogsMonthly(0)
+    }
+  }
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -112,6 +195,17 @@ export default function FinancePage() {
   })
 
   const monthlyTotal = monthlyOrders.reduce((sum, order) => sum + order.total, 0)
+
+  const grossMargin = monthlyTotal - cogsMonthly
+  const grossMarginPct = monthlyTotal > 0 ? Math.round((grossMargin / monthlyTotal) * 100) : 0
+
+  const todayReceipts = orders
+    .filter((order) => {
+      const od = new Date(order.created_at)
+      od.setHours(0, 0, 0, 0)
+      return od.getTime() === today.getTime() && order.status === 'completed'
+    })
+    .reduce((sum, order) => sum + order.total, 0)
 
   // Weekly chart data
   const getWeeklyData = () => {
@@ -167,6 +261,28 @@ export default function FinancePage() {
         </p>
       </div>
 
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  A Pagar (Aberto)
+                </p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {formatPrice(apOpenTotal)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Contas em aberto
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Calendar className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* Stats Cards */}
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Card>
@@ -227,6 +343,71 @@ export default function FinancePage() {
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <Calendar className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  COGS do Mês
+                </p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {formatPrice(cogsMonthly)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Custo das Vendas
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Coins className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Margem Bruta
+                </p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {formatPrice(grossMargin)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {grossMarginPct}% do faturamento
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20">
+                <TrendingUp className="h-6 w-6 text-accent-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  A Receber (Aberto)
+                </p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {formatPrice(arOpenTotal)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Faturas em aberto
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <ShoppingBag className="h-6 w-6 text-primary" />
               </div>
             </div>
           </CardContent>
