@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea as UIScrollArea } from '@/components/ui/scroll-area'
+import Link from 'next/link'
+import { Truck } from 'lucide-react'
 
 const columns = [
   { id: 'pending', title: 'Pendente', color: 'bg-yellow-500' },
@@ -154,18 +156,26 @@ export function OrdersKanban() {
             {orders.length} pedido(s) no total
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setIsLoading(true)
-            fetchOrders()
-          }}
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Atualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setIsLoading(true)
+              fetchOrders()
+            }}
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <Button asChild size="sm" className="gap-2">
+            <Link href="/admin/entregas">
+              <Truck className="h-4 w-4" />
+              Entregas
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Kanban Board */}

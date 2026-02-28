@@ -33,10 +33,12 @@ import {
   Utensils,
   MoveRight,
   Timer,
+  Truck,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Pedidos', href: '/admin', icon: ClipboardList },
+  { name: 'Entregas', href: '/admin/entregas', icon: Truck },
   { name: 'Produtos', href: '/admin/products', icon: IceCream },
   { name: 'Estoque', href: '/admin/stock', icon: Package },
   { name: 'Financeiro', href: '/admin/finance', icon: BarChart3 },

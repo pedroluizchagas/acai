@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import type { Order } from '@/lib/types'
+import Link from 'next/link'
+import { Truck } from 'lucide-react'
 
 export default function AdminDashboardPage() {
   const supabase = createClient()
@@ -87,13 +89,22 @@ export default function AdminDashboardPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground md:text-3xl">
-          Admin
-        </h1>
-        <p className="text-muted-foreground">
-          Gestão de pedidos, clientes e recuperação
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground md:text-3xl">
+            Admin
+          </h1>
+          <p className="text-muted-foreground">
+            Gestão de pedidos, clientes e recuperação
+          </p>
+        </div>
+        <Link
+          href="/admin/entregas"
+          className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+        >
+          <Truck className="mr-2 h-4 w-4" />
+          Entregas
+        </Link>
       </div>
 
       <Tabs defaultValue="orders" className="space-y-6">

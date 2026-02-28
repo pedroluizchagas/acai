@@ -37,3 +37,53 @@ export async function estimateRouteFromStore(
     return null
   }
 }
+
+export async function routeGeometryFromStore(
+  destination: GeoPoint,
+): Promise<Array<GeoPoint> | null> {
+  try {
+    const url = `${OSRM_ENDPOINT}/route/v1/driving/${STORE_COORDS.lng},${STORE_COORDS.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = await res.json()
+    const coords: Array<[number, number]> | undefined = data?.routes?.[0]?.geometry?.coordinates
+    if (!coords || !Array.isArray(coords)) return null
+    return coords.map(([lng, lat]) => ({ lat, lng }))
+  } catch {
+    return null
+  }
+}
+
+function toMeters(point: GeoPoint): { x: number; y: number } {
+  const latRad = (point.lat * Math.PI) / 180
+  const x = point.lng * 111320 * Math.cos(latRad)
+  const y = point.lat * 111320
+  return { x, y }
+}
+
+function distPointToSegmentMeters(p: GeoPoint, a: GeoPoint, b: GeoPoint): number {
+  const P = toMeters(p)
+  const A = toMeters(a)
+  const B = toMeters(b)
+  const ABx = B.x - A.x
+  const ABy = B.y - A.y
+  const APx = P.x - A.x
+  const APy = P.y - A.y
+  const ab2 = ABx * ABx + ABy * ABy
+  const t = ab2 === 0 ? 0 : Math.max(0, Math.min(1, (APx * ABx + APy * ABy) / ab2))
+  const Cx = A.x + t * ABx
+  const Cy = A.y + t * ABy
+  const dx = P.x - Cx
+  const dy = P.y - Cy
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+export function minDistanceToPolylineMeters(point: GeoPoint, polyline: Array<GeoPoint>): number | null {
+  if (!polyline || polyline.length < 2) return null
+  let min = Infinity
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const d = distPointToSegmentMeters(point, polyline[i], polyline[i + 1])
+    if (d < min) min = d
+  }
+  return isFinite(min) ? min : null
+}
